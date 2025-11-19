@@ -1,0 +1,20 @@
+Python
+
+pycache/
+*.py[cod]
+*$py.class
+
+Virtual Environments
+
+venv/
+.venv/
+env/
+
+IDE settings (Optional but recommended)
+
+.idea/
+.vscode/
+
+Logs
+
+*.log

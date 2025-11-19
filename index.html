@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZOF - Zero of Functions Solver</title>
+  <style>
+    /* Combined styles: User preferences + Project requirements */
+    :root { --primary: #2563eb; --bg: #f8fafc; --card: #ffffff; --border: #ddd; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 980px; margin: 20px auto; padding: 20px; background: var(--bg); color: #333; }
+
+    h1 { color: var(--primary); text-align: center; margin-bottom: 30px; }
+
+    .box { border: 1px solid var(--border); padding: 20px; border-radius: 8px; margin-bottom: 20px; background: var(--card); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
+    label { display: block; margin-top: 12px; font-weight: 600; font-size: 0.9em; color: #444; }
+    input, select { width: 100%; padding: 10px; margin-top: 5px; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; }
+
+    button { width: 100%; padding: 12px; margin-top: 20px; border-radius: 6px; border: none; background: var(--primary); color: white; font-size: 1em; cursor: pointer; transition: background 0.2s; }
+    button:hover { background: #1d4ed8; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9em; }
+    th, td { padding: 10px; border: 1px solid #eee; text-align: center; }
+    th { background: #f1f5f9; color: #333; }
+    td { font-family: monospace; }
+
+    .error { color: #b00020; background: #ffe6e6; padding: 15px; border-radius: 6px; border: 1px solid #fecaca; margin-bottom: 20px; }
+    .success-header { color: #166534; background: #dcfce7; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
+
+    /* Utility to hide/show inputs */
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>ZOF — Zero of Functions Solver</h1>
+
+  <div class="box">
+    <form method="post" action="/">
+      <label>Select Method:</label>
+      <select name="method" id="methodSelect" onchange="updateForm()">
+        <option value="bisection" {% if method == 'bisection' %}selected{% endif %}>Bisection Method</option>
+        <option value="regula_falsi" {% if method == 'regula_falsi' %}selected{% endif %}>Regula Falsi</option>
+        <option value="secant" {% if method == 'secant' %}selected{% endif %}>Secant Method</option>
+        <option value="newton" {% if method == 'newton' %}selected{% endif %}>Newton-Raphson</option>
+        <option value="fixed_point" {% if method == 'fixed_point' %}selected{% endif %}>Fixed Point Iteration</option>
+        <option value="modified_secant" {% if method == 'modified_secant' %}selected{% endif %}>Modified Secant</option>
+      </select>
+
+      <label id="funcLabel">Function f(x) (Python syntax):</label>
+      <input name="function" value="{{ func_str }}" placeholder="example: x**3 - 2*x - 5" required>
+      <small style="color:gray; font-size:0.8em;">Supported: +, -, *, /, **, sin(), cos(), exp()</small>
+
+      <!-- Input 1: Acts as 'a' or 'x0' depending on method -->
+      <label id="p1Label">Guess a:</label>
+      <input type="number" step="any" name="param1" value="{{ param1 }}" required placeholder="e.g. 1.0">
+
+      <!-- Input 2: Acts as 'b' or 'x1'. Hidden for Newton/Fixed Point -->
+      <div id="p2Group">
+        <label id="p2Label">Guess b:</label>
+        <input type="number" step="any" name="param2" value="{{ param2 }}" placeholder="e.g. 3.0">
+      </div>
+
+      <!-- Input 3: Acts as 'Delta'. Only for Modified Secant -->
+      <div id="p3Group" class="hidden">
+        <label id="p3Label">Delta (perturbation):</label>
+        <input type="number" step="any" name="param3" value="{{ param3 }}" placeholder="e.g. 0.01">
+      </div>
+
+      <label>Tolerance:</label>
+      <input name="tolerance" value="{{ tol|default('1e-6') }}" placeholder="1e-6">
+
+      <label>Max Iterations:</label>
+      <input type="number" name="iterations" value="{{ max_iter|default(100) }}" placeholder="50">
+
+      <button type="submit">Compute Root</button>
+    </form>
+  </div>
+
+  {% if error %}
+    <div class="error"><strong>Error:</strong> {{ error }}</div>
+  {% endif %}
+
+  {% if result %}
+    <div class="box">
+      <div class="success-header">
+        <h3 style="margin:0 0 10px 0;">Converged</h3>
+        <p style="margin:5px 0;"><strong>Root:</strong> {{ result.root }}</p>
+        <p style="margin:5px 0;"><strong>Final Error:</strong> {{ result.error }} | <strong>Iterations:</strong> {{ result.iters }}</p>
+      </div>
+
+      <h4>Iteration History</h4>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            {% if history %}
+              <tr>
+                {% for key in history[0].keys() %}
+                  <th>{{ key|capitalize }}</th>
+                {% endfor %}
+              </tr>
+            {% endif %}
+          </thead>
+          <tbody>
+            {% for row in history %}
+              <tr>
+                {% for val in row.values() %}
+                  <td>{{ val }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  <script>
+    function updateForm() {
+        const method = document.getElementById('methodSelect').value;
+        const p1Label = document.getElementById('p1Label');
+        const p2Label = document.getElementById('p2Label');
+        const p2Group = document.getElementById('p2Group');
+        const p3Group = document.getElementById('p3Group');
+        const funcLabel = document.getElementById('funcLabel');
+
+        // Reset defaults (Bisection/Regula Falsi state)
+        p2Group.style.display = 'block';
+        p3Group.style.display = 'none';
+        funcLabel.innerText = "Function f(x):";
+
+        if (method === 'bisection' || method === 'regula_falsi') {
+            p1Label.innerText = "Interval Start (a):";
+            p2Label.innerText = "Interval End (b):";
+        }
+        else if (method === 'secant') {
+            p1Label.innerText = "First Guess (x0):";
+            p2Label.innerText = "Second Guess (x1):";
+        }
+        else if (method === 'newton') {
+            p1Label.innerText = "Initial Guess (x0):";
+            p2Group.style.display = 'none'; // Newton only needs x0
+        }
+        else if (method === 'fixed_point') {
+            funcLabel.innerText = "Function g(x) [where x = g(x)]:";
+            p1Label.innerText = "Initial Guess (x0):";
+            p2Group.style.display = 'none'; // Fixed point only needs x0
+        }
+        else if (method === 'modified_secant') {
+            p1Label.innerText = "Initial Guess (x0):";
+            p2Group.style.display = 'none';
+            p3Group.style.display = 'block'; // Show Delta input
+        }
+    }
+
+    // Initialize on page load
+    window.onload = updateForm;
+  </script>
+</body>
+</html>
